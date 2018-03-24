@@ -29,15 +29,19 @@ class BetterReflexAgent(agents.ReflexAgent):
                             eval += 200
                     else:
                         if util.manhattan(pacpos, ghost) > 2:
-                             eval += 700
+                             eval += 1000
             if pacpos == gstate.pellets:
-                eval += 500
+                eval += 1500
             if pacpos != None:
                 for dot in dots:
-                    if util.manhattan(pacpos, dot) < 2:
-                        eval += 100
+                    if util.manhattan(pacpos, dot) < 3:
+                        eval += 500
+                        if util.manhattan(pacpos, dot) < 2:
+                            eval += 300
+                            if util.manhattan(pacpos, dot) < 1:
+                                eval += 100
                     if pacpos == dot:
-                        eval += 150
+                        eval += 900
             return eval
         else:
             eval -= 500
@@ -52,31 +56,29 @@ class MinimaxAgent(agents.AdversarialAgent):
         for move in possMoves:
             if move == util.Move.stop:
                 possMoves.remove(move)
-        for successor in possMoves:
-            if(successor != None):
+        for move in possMoves:
+            if(move != None):
                 eval.append(self.miniMax(depth, gstate, player))
         for i in range(0, len(possMoves)):
-            if eval[1] == max(eval):
+            if eval[i] == max(eval):
                 return possMoves[i]
 
     def miniMax(self, depth, gstate, player):
-        if depth == 0 | gstate.gameover:
+        if depth == 0 or gstate.gameover:
             best_value = self.evaluate(gstate)
             return best_value
         if player:
             best_value = float("-inf")
             successors = gstate.successors(1)
             for successor in successors:
-                if(successor != None):
-                    v = self.miniMax(depth-1, successor, False)
-                    best_value = max(v, best_value)
+                v = self.miniMax(depth-1, successor, False)
+                best_value = max(v, best_value)
         else:
             best_value = float("inf")
             successors = gstate.successors(0)
             for successor in successors:
-                if(successor != None):
-                    v = self.miniMax(depth, successor, True)
-                    best_value = min(best_value, v)
+                v = self.miniMax(depth, successor, True)
+                best_value = min(best_value, v)
         return best_value
 
 
@@ -84,39 +86,66 @@ class MinimaxAgent(agents.AdversarialAgent):
 
 class AlphabetaAgent(agents.AdversarialAgent):
     def move(self, gstate):
-        raise exceptions.EmptyAssignmentError
+        eval = []
+        player = False
+        depth = self.depth
+        poss_moves = list(gstate.legal_moves_id(0))
+        alpha = float("-inf")
+        beta = float("inf")
+        for move in poss_moves:
+            if move == util.Move.stop:
+                poss_moves.remove(move)
+        for move in poss_moves:
+            if(move != None):
+                eval.append(self.Alphabeta(depth, gstate, player, alpha, beta))
+        for i in range(0, len(poss_moves)):
+            if eval[i] == max(eval):
+                return poss_moves[i]
+
+    def Alphabeta(self, depth, gstate, player, alpha, beta):
+        if depth == 0 or gstate.gameover:
+            best_value = MinimaxAgent.miniMax(self, depth, gstate, player)
+            return best_value
+        if player:
+            v = float("-inf")
+            successors = gstate.successors(1)
+            for successor in successors:
+                v = max(v, self.Alphabeta(depth-1, successor, False, alpha, beta))
+                alpha = max(alpha, v)
+                if alpha >= beta:
+                    break
+        else:
+            v = float("inf")
+            successors = gstate.successors(0)
+            for successor in successors:
+                v = self.Alphabeta(depth, successor, True, alpha, beta)
+                beta = min(beta, v)
+                if alpha >= beta:
+                    break
+        return v
 
 
 def better_evaluate(gstate):
-    dots = gstate.dots.list()
-    successors = gstate.successors(0)
-    for node in successors:
-        gstate.apply_move(0,node)
-        if gstate.win:
-            return 500000000000000
-        if gstate.loss:
-            return -500000000000000
+    evaluate = 0
+    if gstate.win:
+        evaluate = float("inf")
+    if gstate.loss:
+        evaluate = float("-inf")
 
-        eval = 0
-        pacpos = gstate.pacman
-        if pacpos in gstate.ghosts:
-            eval -= 1500
-        if pacpos != None:
-            for ghost in gstate.ghosts:
-                if util.manhattan(pacpos, ghost) > 2:
-                     eval += 700
-        if pacpos == gstate.pellets:
-            eval += 200
-            if gstate.timers>5:
-                if pacpos == gstate.ghosts:
-                    eval += 200
-        if pacpos != None:
-            for dot in dots:
-                if util.manhattan(pacpos, dot) < 2:
-                    eval += 100
-                if pacpos == dot:
-                    eval += 150
-        return eval
+    dist_dots = 0
+    for dot in gstate.dots:
+        dist_dots += util.manhattan(dot, gstate.pacman)
+    evaluate += dist_dots*5
+    dist_pellets = 0
+    for pellet in gstate.pellets:
+        dist_pellets += util.manhattan(pellet, gstate.pacman)
+    evaluate += dist_pellets*8
+    dist_ghosts = 0
+    for ghost in gstate.ghosts:
+        dist_ghosts += util.manhattan(ghost, gstate.pacman)
+    evaluate -= dist_ghosts*10
+    return evaluate
+
 
 class MultiAlphabetaAgent(agents.AdversarialAgent):
     def move(self, gstate):
